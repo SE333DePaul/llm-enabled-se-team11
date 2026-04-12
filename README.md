@@ -1,4 +1,4 @@
-# SE 331 — LLM Chatbot Starter  
+# SE 333 — LLM Chatbot Starter  
 **DePaul University · Spring 2026**
 
 A minimal but production-shaped Spring Boot chatbot that talks to a free LLM
