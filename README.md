@@ -121,13 +121,13 @@ Build a Docker image (multi-stage build produces a small runtime image):
 
 ```bash
 # from project root
-docker build -t se331-chatbot:latest .
+docker build -t se333-chatbot:latest .
 ```
 
 Run the container locally, passing your OpenRouter API key as an environment variable:
 
 ```bash
-docker run -p 8000:8000 -e OPENROUTER_API_KEY="$OPENROUTER_API_KEY" se331-chatbot:latest
+docker run -p 8000:8000 -e OPENROUTER_API_KEY="$OPENROUTER_API_KEY" se333-chatbot:latest
 ```
 
 The app will be available at `http://localhost:8000` inside your browser. Use `-e OPENROUTER_API_KEY=sk-or-...` to pass a key inline if you prefer (do not commit keys to source control).
