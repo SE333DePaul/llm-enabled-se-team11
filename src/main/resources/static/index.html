@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SE 331 Chatbot</title>
+    <style>
+        /* ── Reset & base ─────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: system-ui, sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        /* ── Card container ───────────────────────────────── */
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,.12);
+            width: 100%;
+            max-width: 700px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ── Header ───────────────────────────────────────── */
+        header {
+            background: #1a73e8;
+            color: #fff;
+            padding: 1rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header h1 { font-size: 1.1rem; font-weight: 600; }
+        header button {
+            background: rgba(255,255,255,.2);
+            border: none;
+            color: #fff;
+            padding: .35rem .75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: .85rem;
+        }
+        header button:hover { background: rgba(255,255,255,.35); }
+
+        /* ── Message list ─────────────────────────────────── */
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: .75rem;
+            min-height: 400px;
+            max-height: 60vh;
+        }
+
+        .bubble {
+            max-width: 80%;
+            padding: .65rem 1rem;
+            border-radius: 18px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: .95rem;
+        }
+        .bubble.user {
+            align-self: flex-end;
+            background: #1a73e8;
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+        .bubble.assistant {
+            align-self: flex-start;
+            background: #f0f2f5;
+            color: #222;
+            border-bottom-left-radius: 4px;
+        }
+        .bubble.error {
+            align-self: center;
+            background: #fde8e8;
+            color: #b00020;
+            font-size: .85rem;
+        }
+
+        /* Typing indicator */
+        .bubble.typing::after {
+            content: '●●●';
+            animation: blink 1s step-start infinite;
+        }
+        @keyframes blink {
+            0%,100% { opacity: 1; } 50% { opacity: .3; }
+        }
+
+        /* ── Input row ────────────────────────────────────── */
+        .input-row {
+            display: flex;
+            gap: .5rem;
+            padding: 1rem 1.25rem;
+            border-top: 1px solid #e5e7eb;
+        }
+        #userInput {
+            flex: 1;
+            padding: .65rem .9rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+            resize: none;
+        }
+        #userInput:focus { border-color: #1a73e8; }
+        #sendBtn {
+            padding: .65rem 1.1rem;
+            background: #1a73e8;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: .95rem;
+            font-weight: 600;
+        }
+        #sendBtn:hover { background: #1558b0; }
+        #sendBtn:disabled { opacity: .5; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <header>
+        <h1>SE 331 Chatbot</h1>
+        <button id="clearBtn">Clear chat</button>
+    </header>
+
+    <div id="messages">
+        <div class="bubble assistant">
+            Hi! I am your SE 331 assistant. How can I help you today?
+        </div>
+    </div>
+
+    <div class="input-row">
+        <textarea id="userInput" rows="1"
+                  placeholder="Type a message… (Enter to send)"></textarea>
+        <button id="sendBtn">Send</button>
+    </div>
+</div>
+
+<script>
+    /* ── DOM references ──────────────────────────────────── */
+    const messagesEl = document.getElementById('messages');
+    const inputEl    = document.getElementById('userInput');
+    const sendBtn    = document.getElementById('sendBtn');
+    const clearBtn   = document.getElementById('clearBtn');
+
+    /* ── Scroll helper ───────────────────────────────────── */
+    function scrollToBottom() {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    /* ── Append a bubble to the message list ─────────────── */
+    function appendBubble(role, text) {
+        const div = document.createElement('div');
+        // Always add the base 'bubble' class
+        div.classList.add('bubble');
+
+        // Support either a string with space-separated classes or an array
+        if (Array.isArray(role)) {
+            role.forEach(r => r && div.classList.add(r));
+        } else if (typeof role === 'string') {
+            role.trim().split(/\s+/).forEach(r => { if (r) div.classList.add(r); });
+        }
+
+        div.textContent = text;
+        messagesEl.appendChild(div);
+        scrollToBottom();
+        return div;
+    }
+
+    /* ── Send a message to the backend ──────────────────── */
+    async function sendMessage() {
+        const text = inputEl.value.trim();
+        if (!text) return;
+
+        inputEl.value = '';
+        inputEl.style.height = 'auto';
+        sendBtn.disabled = true;
+
+        appendBubble('user', text);
+
+        // Show typing indicator while waiting
+        const typingBubble = appendBubble('assistant typing', '');
+
+        try {
+            const response = await fetch('/api/chat', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ message: text })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            typingBubble.classList.remove('typing');
+            typingBubble.textContent = data.reply;
+
+        } catch (err) {
+            typingBubble.classList.remove('typing');
+            typingBubble.classList.add('error');
+            typingBubble.textContent = 'Error: ' + err.message;
+        } finally {
+            sendBtn.disabled = false;
+            inputEl.focus();
+            scrollToBottom();
+        }
+    }
+
+    /* ── Clear conversation ──────────────────────────────── */
+    async function clearHistory() {
+        await fetch('/api/chat/history', { method: 'DELETE' });
+        messagesEl.innerHTML = '';
+        appendBubble('assistant', 'Conversation cleared. Start fresh!');
+    }
+
+    /* ── Event listeners ─────────────────────────────────── */
+    sendBtn.addEventListener('click', sendMessage);
+
+    inputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    // Auto-grow textarea
+    inputEl.addEventListener('input', () => {
+        inputEl.style.height = 'auto';
+        inputEl.style.height = inputEl.scrollHeight + 'px';
+    });
+
+    clearBtn.addEventListener('click', clearHistory);
+</script>
+
+</body>
+</html>

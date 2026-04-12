@@ -1,0 +1,13 @@
+target/
+.mvn/
+.mvnw
+.mvnw.cmd
+.git
+.gitignore
+README.md
+**/node_modules
+**/.idea
+**/.vscode
+**/*.log
+**/*.tmp
+**/*.iml

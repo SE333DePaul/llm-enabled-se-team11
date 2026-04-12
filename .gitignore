@@ -1,0 +1,20 @@
+# ── Build output ──────────────────────────────────────────────
+target/
+
+# ── IDE files ─────────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+*.classpath
+*.project
+.settings/
+
+# ── API keys — NEVER commit your real key ─────────────────────
+# If you put your key directly in application.properties,
+# add that file here. Use a separate application-local.properties
+# for local overrides so the template stays safe.
+application-local.properties
+
+# ── macOS / Windows clutter ───────────────────────────────────
+.DS_Store
+Thumbs.db
