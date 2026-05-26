@@ -99,6 +99,63 @@ public class ChatService {
         return List.copyOf(history);
     }
 
+    /**
+     * Summarize a block of text using a one-shot LLM call.
+     *
+     * This does NOT use or modify the conversation history.
+     * It sends a fresh request to the LLM with just a system instruction
+     * to summarize and the user's text, then returns the summary.
+     */
+    public String summarize(String text) {
+        // Build a one-shot messages list (no history involved)
+        List<ChatMessage> messages = new ArrayList<>();
+        messages.add(new ChatMessage("system",
+                "You are a helpful summarizer. Provide a clear and concise TL;DR summary of the text the user gives you. Keep it to 2-3 sentences."));
+        messages.add(new ChatMessage("user", text));
+
+        // Build the request body
+        Map<String, Object> body = new HashMap<>();
+        body.put("model", model);
+        body.put("messages", messages);
+
+        HttpHeaders headers = buildHeaders();
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+
+        // Make the API call (with the same retry logic as chat)
+        final int maxAttempts = 4;
+        long delayMs = 1000L;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                ResponseEntity<JsonNode> response =
+                        restTemplate.postForEntity(apiUrl, request, JsonNode.class);
+
+                return parseReply(response.getBody());
+
+            } catch (HttpStatusCodeException e) {
+                if (e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
+                    if (attempt == maxAttempts) {
+                        return "API Error: 429 Too Many Requests - " + e.getResponseBodyAsString();
+                    }
+                    try {
+                        Thread.sleep(delayMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return "API Error: interrupted while waiting to retry.";
+                    }
+                    delayMs *= 2;
+                    continue;
+                }
+                return "API Error: " + e.getStatusCode() + " - " + e.getResponseBodyAsString();
+
+            } catch (RestClientException e) {
+                return "API Error: " + e.getMessage();
+            }
+        }
+
+        return "API Error: unknown failure";
+    }
+
     // ── Private helpers ───────────────────────────────────────
 
     /**
