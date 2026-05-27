@@ -55,16 +55,15 @@ public class ChatService {
     private final RestTemplate restTemplate;
 
     /**
-     * In-memory conversation history shared by all users.
+     * In-memory conversation histories, one per session.
      *
-     * NOTE: Because this is a singleton Spring bean, all browser
-     * sessions see the same history. This is intentional for
-     * simplicity in a student demo.
+     * Each key is a session ID string (e.g. "abc123"), and the
+     * value is that session's conversation history.
      *
-     * EXTEND: Replace this list with a Map<String, List<ChatMessage>>
-     * keyed by session ID to support multiple independent users.
+     * When a new session ID arrives for the first time, we
+     * automatically create an empty history list for it.
      */
-    private final List<ChatMessage> history = new ArrayList<>();
+    private final Map<String, List<ChatMessage>> sessionHistories = new HashMap<>();
 
     public ChatService(RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
@@ -76,27 +75,45 @@ public class ChatService {
      * Send a user message to the LLM and return the assistant reply.
      *
      * High-level flow:
-     *   user message → append to history
+     *   look up (or create) the history for this sessionId
+     *   → append user message to that session's history
      *   → build payload (system + history) → POST to OpenRouter
      *   → parse reply → append to history → return reply
      */
-    public String chat(String userMessage) {
+    public String chat(String sessionId, String userMessage) {
+        List<ChatMessage> history = getOrCreateHistory(sessionId);
+
         history.add(new ChatMessage("user", userMessage));
 
-        String reply = callOpenRouter();
+        String reply = callOpenRouter(history);
 
         history.add(new ChatMessage("assistant", reply));
         return reply;
     }
 
-    /** Clear history so the next message starts a fresh conversation. */
-    public void resetHistory() {
-        history.clear();
+    /** Clear history for a specific session. */
+    public void resetHistory(String sessionId) {
+        sessionHistories.remove(sessionId);
     }
 
-    /** Read-only view of history (useful for debugging or future features). */
-    public List<ChatMessage> getHistory() {
+    /** Read-only view of a specific session's history. */
+    public List<ChatMessage> getHistory(String sessionId) {
+        List<ChatMessage> history = sessionHistories.get(sessionId);
+        if (history == null) {
+            return List.of();
+        }
         return List.copyOf(history);
+    }
+
+    /**
+     * Look up the history list for a session ID.
+     * If this is the first message for that session, create a new empty list.
+     */
+    private List<ChatMessage> getOrCreateHistory(String sessionId) {
+        if (!sessionHistories.containsKey(sessionId)) {
+            sessionHistories.put(sessionId, new ArrayList<>());
+        }
+        return sessionHistories.get(sessionId);
     }
 
     /**
@@ -171,9 +188,11 @@ public class ChatService {
      *     ...
      *   ]
      * }
+     *
+     * @param history the conversation history for the current session
      */
-    private String callOpenRouter() {
-        // Build the messages list: system prompt first, then full history
+    private String callOpenRouter(List<ChatMessage> history) {
+        // Build the messages list: system prompt first, then this session's history
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(new ChatMessage("system", systemPrompt));
         messages.addAll(history);

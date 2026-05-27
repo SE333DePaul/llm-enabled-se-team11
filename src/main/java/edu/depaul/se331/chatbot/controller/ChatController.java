@@ -37,7 +37,7 @@ public class ChatController {
     /**
      * Send a message to the chatbot.
      *
-     * Request body : { "message": "your text here" }
+     * Request body : { "message": "your text here", "sessionId": "abc123" }
      * Response body: { "reply": "assistant reply here" }
      */
     @PostMapping
@@ -46,30 +46,61 @@ public class ChatController {
             return ResponseEntity.badRequest()
                     .body(new ChatResponse("Please provide a non-empty message."));
         }
-        String reply = chatService.chat(request.getMessage().trim());
+
+        // Use the provided sessionId, or fall back to "default" if none was sent
+        String sessionId = request.getSessionId();
+        if (sessionId == null || sessionId.isBlank()) {
+            sessionId = "default";
+        }
+
+        String reply = chatService.chat(sessionId, request.getMessage().trim());
         return ResponseEntity.ok(new ChatResponse(reply));
     }
 
     /**
-     * Clear the in-memory conversation history.
+     * Clear the conversation history for a specific session.
      *
-     * Useful when you want to start a completely new topic
-     * without the model seeing previous turns.
+     * DELETE /api/chat/history/{sessionId}
+     */
+    @DeleteMapping("/history/{sessionId}")
+    public ResponseEntity<Map<String, String>> clearSessionHistory(
+            @PathVariable String sessionId) {
+        chatService.resetHistory(sessionId);
+        return ResponseEntity.ok(Map.of("status",
+                "Conversation history cleared for session: " + sessionId));
+    }
+
+    /**
+     * Clear the conversation history for the "default" session.
+     * Kept for backwards compatibility with the old endpoint.
+     *
+     * DELETE /api/chat/history
      */
     @DeleteMapping("/history")
     public ResponseEntity<Map<String, String>> clearHistory() {
-        chatService.resetHistory();
+        chatService.resetHistory("default");
         return ResponseEntity.ok(Map.of("status", "Conversation history cleared."));
     }
 
     /**
-     * Inspect the current conversation history (for debugging).
+     * Inspect the conversation history for a specific session (for debugging).
      *
-     * EXTEND: Remove or restrict this endpoint before deploying
-     * to a production environment.
+     * GET /api/chat/history/{sessionId}
+     */
+    @GetMapping("/history/{sessionId}")
+    public ResponseEntity<List<ChatMessage>> getSessionHistory(
+            @PathVariable String sessionId) {
+        return ResponseEntity.ok(chatService.getHistory(sessionId));
+    }
+
+    /**
+     * Inspect the "default" session history (for debugging).
+     * Kept for backwards compatibility.
+     *
+     * GET /api/chat/history
      */
     @GetMapping("/history")
     public ResponseEntity<List<ChatMessage>> getHistory() {
-        return ResponseEntity.ok(chatService.getHistory());
+        return ResponseEntity.ok(chatService.getHistory("default"));
     }
 }

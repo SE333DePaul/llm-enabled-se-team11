@@ -220,6 +220,12 @@
 </div>
 
 <script>
+    /* ── Session ID ──────────────────────────────────────── */
+    // Generate a unique session ID for this browser tab.
+    // Each tab gets its own independent conversation history.
+    const sessionId = 'session-' + Math.random().toString(36).substring(2, 10);
+    console.log('Session ID:', sessionId);
+
     /* ── DOM references ──────────────────────────────────── */
     const messagesEl = document.getElementById('messages');
     const inputEl    = document.getElementById('userInput');
@@ -268,7 +274,7 @@
             const response = await fetch('/api/chat', {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({ message: text })
+                body:    JSON.stringify({ message: text, sessionId: sessionId })
             });
 
             if (!response.ok) {
@@ -292,7 +298,7 @@
 
     /* ── Clear conversation ──────────────────────────────── */
     async function clearHistory() {
-        await fetch('/api/chat/history', { method: 'DELETE' });
+        await fetch('/api/chat/history/' + sessionId, { method: 'DELETE' });
         messagesEl.innerHTML = '';
         appendBubble('assistant', 'Conversation cleared. Start fresh!');
     }
