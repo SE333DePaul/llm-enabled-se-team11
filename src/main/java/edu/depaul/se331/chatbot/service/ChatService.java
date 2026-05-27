@@ -2,9 +2,11 @@ package edu.depaul.se331.chatbot.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import edu.depaul.se331.chatbot.model.ChatMessage;
+import edu.depaul.se331.chatbot.repository.ChatMessageRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
@@ -53,20 +55,12 @@ public class ChatService {
 
     // ── State ─────────────────────────────────────────────────
     private final RestTemplate restTemplate;
+    private final ChatMessageRepository chatMessageRepository;
 
-    /**
-     * In-memory conversation histories, one per session.
-     *
-     * Each key is a session ID string (e.g. "abc123"), and the
-     * value is that session's conversation history.
-     *
-     * When a new session ID arrives for the first time, we
-     * automatically create an empty history list for it.
-     */
-    private final Map<String, List<ChatMessage>> sessionHistories = new HashMap<>();
-
-    public ChatService(RestTemplate restTemplate) {
+    public ChatService(RestTemplate restTemplate,
+                       ChatMessageRepository chatMessageRepository) {
         this.restTemplate = restTemplate;
+        this.chatMessageRepository = chatMessageRepository;
     }
 
     // ── Public API ────────────────────────────────────────────
@@ -75,45 +69,36 @@ public class ChatService {
      * Send a user message to the LLM and return the assistant reply.
      *
      * High-level flow:
-     *   look up (or create) the history for this sessionId
-     *   → append user message to that session's history
+     *   save the user message to the database
+     *   → load this session's full history from the database
      *   → build payload (system + history) → POST to OpenRouter
-     *   → parse reply → append to history → return reply
+     *   → save the assistant reply to the database → return reply
      */
     public String chat(String sessionId, String userMessage) {
-        List<ChatMessage> history = getOrCreateHistory(sessionId);
+        // 1. Save the user's message to the database
+        chatMessageRepository.save(new ChatMessage(sessionId, "user", userMessage));
 
-        history.add(new ChatMessage("user", userMessage));
+        // 2. Load the full conversation history for this session from the database
+        List<ChatMessage> history = chatMessageRepository.findBySessionIdOrderByIdAsc(sessionId);
 
+        // 3. Call the LLM with the full history
         String reply = callOpenRouter(history);
 
-        history.add(new ChatMessage("assistant", reply));
+        // 4. Save the assistant's reply to the database
+        chatMessageRepository.save(new ChatMessage(sessionId, "assistant", reply));
+
         return reply;
     }
 
-    /** Clear history for a specific session. */
+    /** Clear history for a specific session by deleting all its messages from the database. */
+    @Transactional
     public void resetHistory(String sessionId) {
-        sessionHistories.remove(sessionId);
+        chatMessageRepository.deleteBySessionId(sessionId);
     }
 
-    /** Read-only view of a specific session's history. */
+    /** Load a specific session's history from the database. */
     public List<ChatMessage> getHistory(String sessionId) {
-        List<ChatMessage> history = sessionHistories.get(sessionId);
-        if (history == null) {
-            return List.of();
-        }
-        return List.copyOf(history);
-    }
-
-    /**
-     * Look up the history list for a session ID.
-     * If this is the first message for that session, create a new empty list.
-     */
-    private List<ChatMessage> getOrCreateHistory(String sessionId) {
-        if (!sessionHistories.containsKey(sessionId)) {
-            sessionHistories.put(sessionId, new ArrayList<>());
-        }
-        return sessionHistories.get(sessionId);
+        return chatMessageRepository.findBySessionIdOrderByIdAsc(sessionId);
     }
 
     /**

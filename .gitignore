@@ -15,6 +15,9 @@ target/
 # for local overrides so the template stays safe.
 application-local.properties
 
+# ── H2 database files ────────────────────────────────────────
+data/
+
 # ── macOS / Windows clutter ───────────────────────────────────
 .DS_Store
 Thumbs.db
