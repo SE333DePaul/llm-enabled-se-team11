@@ -4,6 +4,8 @@ import edu.depaul.se331.chatbot.model.ChatMessage;
 import edu.depaul.se331.chatbot.model.ChatRequest;
 import edu.depaul.se331.chatbot.model.ChatResponse;
 import edu.depaul.se331.chatbot.service.ChatService;
+import edu.depaul.se331.chatbot.service.RateLimiterService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,9 +29,11 @@ import java.util.Map;
 public class ChatController {
 
     private final ChatService chatService;
+    private final RateLimiterService rateLimiterService;
 
-    public ChatController(ChatService chatService) {
+    public ChatController(ChatService chatService, RateLimiterService rateLimiterService) {
         this.chatService = chatService;
+        this.rateLimiterService = rateLimiterService;
     }
 
     // ── Endpoints ─────────────────────────────────────────────
@@ -51,6 +55,11 @@ public class ChatController {
         String sessionId = request.getSessionId();
         if (sessionId == null || sessionId.isBlank()) {
             sessionId = "default";
+        }
+
+        if (!rateLimiterService.tryAcquire(sessionId)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new ChatResponse("Rate limit exceeded. Please wait before sending more messages."));
         }
 
         String reply = chatService.chat(sessionId, request.getMessage().trim());
