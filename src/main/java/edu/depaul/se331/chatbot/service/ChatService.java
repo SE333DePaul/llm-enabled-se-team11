@@ -53,6 +53,17 @@ public class ChatService {
     @Value("${chatbot.system.prompt}")
     private String systemPrompt;
 
+    /**
+     * Sampling temperature for the LLM. 0 = (near-)deterministic, 1 = creative.
+     *
+     * We default to 0 to reduce output variance, which makes the Track 2 LLM
+     * behavior tests (see LlmBehaviorTest) far more reproducible. Note: temperature
+     * 0 lowers variance but does NOT guarantee identical output across runs or
+     * model versions — that limitation is discussed in RESEARCH.md.
+     */
+    @Value("${openrouter.temperature:0.0}")
+    private double temperature;
+
     // ── State ─────────────────────────────────────────────────
     private final RestTemplate restTemplate;
     private final ChatMessageRepository chatMessageRepository;
@@ -119,6 +130,7 @@ public class ChatService {
         Map<String, Object> body = new HashMap<>();
         body.put("model", model);
         body.put("messages", messages);
+        body.put("temperature", temperature);
 
         HttpHeaders headers = buildHeaders();
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
@@ -186,9 +198,9 @@ public class ChatService {
         Map<String, Object> body = new HashMap<>();
         body.put("model", model);
         body.put("messages", messages);
+        body.put("temperature", temperature);   // 0 = deterministic, 1 = creative
 
         // EXTEND: Add optional parameters here, for example:
-        //   body.put("temperature", 0.7);   // 0 = deterministic, 1 = creative
         //   body.put("max_tokens", 512);
 
         HttpHeaders headers = buildHeaders();
