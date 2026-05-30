@@ -31,6 +31,21 @@ review. **Do NOT merge the PR.**
 - Do **not** edit production code unless you find a genuine bug; if you do, note it in the
   commit message and the PR comment, and prove it with a test.
 
+## ⭐ ITERATION DISCIPLINE — the most important rule ##
+
+**Make the progression visible in git. One gap → one commit → one push → one PR comment.**
+
+- Work **one coverage gap at a time**. Do **NOT** write all the tests, then commit once at
+  the end. Batching everything into a single commit is the main failure mode — avoid it.
+- After each *individual* gap's test passes, **immediately commit + push + add a PR comment**
+  with the coverage numbers, *before* starting the next gap. Aim for **~5 separate commits**,
+  one per gap below, each showing the coverage climbing.
+- Every commit must be green (`mvn clean test` passes at that commit) — incremental, not
+  broken. A small per-commit gain (e.g. +2% branch) is exactly what we want; do not wait to
+  accumulate a big jump.
+- If a generated test fails first and you fix it, that's good — the debug step is part of the
+  story; mention it in that commit/PR comment so the feedback loop is visible.
+
 ## Git Workflow ##
 
 1. **Create a feature branch** from `main`:
@@ -41,24 +56,26 @@ review. **Do NOT merge the PR.**
    - Description: explain the iterative, coverage-driven approach and the 87.2%/71.1% baseline.
    - Do NOT merge — leave it open for human review.
 
-## Test Generation Loop ##
+## Test Generation Loop (one gap per pass) ##
 
-3. **Analyze the source** under `src/main/java/edu/depaul/se331/chatbot/` — controllers,
-   `ChatService`, `RateLimiterService`, repository, and models — to map methods, branches,
-   and edge cases.
-4. **Write JUnit 5 tests** under `src/test/java/edu/depaul/se331/chatbot/`. Mirror the
-   existing style and package layout. Cover happy paths, edge cases, and especially the
-   error/branch paths below.
+3. **Analyze the source** under `src/main/java/edu/depaul/se331/chatbot/` and **parse the
+   baseline** with the `parse_jacoco` tool (`target/site/jacoco/jacoco.xml`) to build an
+   ordered **worklist of gaps** (the error branches below are a good starting order).
+
+Then, for **each gap in the worklist, one at a time**, do a full pass:
+
+4. **Pick the next single gap** and write the JUnit 5 test(s) for *just that gap* under
+   `src/test/java/edu/depaul/se331/chatbot/`, mirroring the existing style/package layout.
 5. **Run** `mvn clean test`.
-6. **If a test fails**, debug: if the test is wrong, fix the test; if it's a real source
-   bug, fix the source and note it.
-7. **After tests pass**, commit with a meaningful message.
-8. **Parse JaCoCo** with the `parse_jacoco` tool:
-   - File path: `target/site/jacoco/jacoco.xml`
-9. **Analyze gaps** from the parsed report: uncovered methods, missed lines, missed branches.
-10. **Write more tests** targeting those gaps.
-11. **Repeat 5–10** until the stop condition below.
-12. **Push** commits to the remote branch after each iteration.
+6. **If it fails**, debug: if the test is wrong, fix the test; if it's a real source bug,
+   fix the source and note it. (Capturing this fix in the commit is encouraged.)
+7. **Parse JaCoCo** again with `parse_jacoco` to read the new coverage.
+8. **Commit + push + add a PR comment** for *this gap only* (see Reporting). The PR comment
+   starts with the `parse_jacoco` numbers so the MCP feedback is visible. **Then** move on.
+9. **Repeat steps 4–8** for the next gap until the stop condition below.
+
+> Reminder: steps 4–8 produce **one commit per gap**. Do not collapse multiple gaps into a
+> single commit — the climbing commit history *is* the deliverable.
 
 ## Where the remaining gaps are (focus here) ##
 
@@ -79,8 +96,12 @@ short of 100% is expected and is itself a finding worth reporting. Do not loop f
 
 ## Reporting ##
 
-After each iteration, add a comment on the PR summarizing:
-- Which tests were added (and which gap each targets).
-- Coverage **before and after** (instruction + branch).
-- Any bug found and fixed.
-- Remaining gaps and why they're hard/unreachable.
+Add **one PR comment per iteration** (i.e. per gap/commit), structured as:
+- **Start with the `parse_jacoco` output** for this iteration (the numbers, so the MCP tool
+  usage is visible right in the PR).
+- Coverage **before → after** for this step (instruction + branch).
+- Which test(s) were added and which gap each targets.
+- Any test that failed first and how you fixed it (the debug step).
+
+A reader scrolling the PR comments should see coverage climb step by step
+(e.g. 87→89→91→…→94), one comment per commit.
