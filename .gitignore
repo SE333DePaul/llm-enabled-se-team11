@@ -21,3 +21,6 @@ data/
 # ── macOS / Windows clutter ───────────────────────────────────
 .DS_Store
 Thumbs.db
+
+# ── Local planning notes (keep off the remote) ────────────────
+final-plan.md
