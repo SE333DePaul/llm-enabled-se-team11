@@ -49,10 +49,10 @@ review. **Do NOT merge the PR.**
 ## Git Workflow ##
 
 1. **Create a feature branch** from `main`:
-   - Branch name: `test/agentic-coverage-improvement`
+   - Branch name: `test/agentic-iterative-coverage-improvement`
    - Do NOT commit directly to `main`.
 2. **Open a pull request** early (after your first passing test commit):
-   - Title: "Agentic test generation: raise chatbot coverage"
+   - Title: "Agentic test generation: raise the chatbot's coverage"
    - Description: explain the iterative, coverage-driven approach and the 87.2%/71.1% baseline.
    - Do NOT merge — leave it open for human review.
 
@@ -71,7 +71,7 @@ Then, for **each gap in the worklist, one at a time**, do a full pass:
    fix the source and note it. (Capturing this fix in the commit is encouraged.)
 7. **Parse JaCoCo** again with `parse_jacoco` to read the new coverage.
 8. **Commit + push + add a PR comment** for *this gap only* (see Reporting). The PR comment
-   starts with the `parse_jacoco` numbers so the MCP feedback is visible. **Then** move on.
+   starts with the `parse_jacoco` numbers so the MCP feedback is visible. Verify that the comment appears nice on the PR comments. **Then** move on with the iteration process (only stop when there is a PR with coverage goals met).
 9. **Repeat steps 4–8** for the next gap until the stop condition below.
 
 > Reminder: steps 4–8 produce **one commit per gap**. Do not collapse multiple gaps into a
