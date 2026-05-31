@@ -121,6 +121,26 @@ class ChatServiceTest {
     }
 
     @Test
+    void chat_retriesOn429AndReturnsApiErrorAfterMaxAttempts() {
+        HttpClientErrorException tooManyRequests = HttpClientErrorException.create(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Too Many Requests",
+                HttpHeaders.EMPTY,
+                "rate limited".getBytes(StandardCharsets.UTF_8),
+                StandardCharsets.UTF_8);
+
+        when(chatMessageRepository.findBySessionIdOrderByIdAsc("s1"))
+                .thenReturn(List.of(new ChatMessage("s1", "user", "hello")));
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(JsonNode.class)))
+                .thenThrow(tooManyRequests);
+
+        String reply = chatService.chat("s1", "hello");
+
+        assertTrue(reply.contains("429 Too Many Requests"));
+        verify(restTemplate, times(4)).postForEntity(anyString(), any(HttpEntity.class), eq(JsonNode.class));
+    }
+
+    @Test
     void resetHistory_deletesSessionMessages() {
         chatService.resetHistory("s1");
         verify(chatMessageRepository).deleteBySessionId("s1");
