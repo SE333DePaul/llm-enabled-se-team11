@@ -12,6 +12,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -19,6 +20,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -167,6 +169,58 @@ class ChatServiceTest {
 
         verify(chatMessageRepository, never()).save(any());
         verify(chatMessageRepository, never()).findBySessionIdOrderByIdAsc(anyString());
+    }
+
+    @Test
+    void summarize_retriesOn429AndReturnsApiErrorAfterMaxAttempts() {
+        HttpClientErrorException tooManyRequests = HttpClientErrorException.create(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Too Many Requests",
+                HttpHeaders.EMPTY,
+                "rate limited".getBytes(StandardCharsets.UTF_8),
+                StandardCharsets.UTF_8);
+
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(JsonNode.class)))
+                .thenThrow(tooManyRequests);
+
+        String result = chatService.summarize("Hello world");
+
+        assertTrue(result.contains("429 Too Many Requests"));
+        verify(restTemplate, times(4)).postForEntity(anyString(), any(HttpEntity.class), eq(JsonNode.class));
+    }
+
+    @Test
+    void summarize_returnsInterruptedErrorWhenSleepIsInterrupted() {
+        HttpClientErrorException tooManyRequests = HttpClientErrorException.create(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Too Many Requests",
+                HttpHeaders.EMPTY,
+                "rate limited".getBytes(StandardCharsets.UTF_8),
+                StandardCharsets.UTF_8);
+
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(JsonNode.class)))
+                .thenThrow(tooManyRequests);
+
+        Thread.currentThread().interrupt();
+        try {
+            String result = chatService.summarize("Hello world");
+
+            assertEquals("API Error: interrupted while waiting to retry.", result);
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    void summarize_handlesMalformedApiResponse() throws Exception {
+        JsonNode malformed = objectMapper.readTree("{\"unexpected\": true}");
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(JsonNode.class)))
+                .thenReturn(new ResponseEntity<>(malformed, HttpStatus.OK));
+
+        String result = chatService.summarize("Summarize this");
+
+        assertTrue(result.contains("unexpected API response"));
     }
 
     @Test
