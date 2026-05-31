@@ -12,6 +12,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -156,6 +157,56 @@ class ChatServiceTest {
 
         assertEquals("TL;DR summary", result);
         verify(restTemplate).postForEntity(anyString(), any(HttpEntity.class), eq(JsonNode.class));
+    }
+
+    @Test
+    void summarize_retriesOn429AndReturnsFinalErrorMessage() {
+        HttpClientErrorException tooManyRequests = HttpClientErrorException.create(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Too Many Requests",
+                HttpHeaders.EMPTY,
+                "rate limit".getBytes(),
+                null);
+
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(JsonNode.class)))
+                .thenThrow(tooManyRequests);
+
+        String result = chatService.summarize("Long text here...");
+
+        assertEquals("API Error: 429 Too Many Requests - rate limit", result);
+        verify(restTemplate, times(4)).postForEntity(anyString(), any(HttpEntity.class), eq(JsonNode.class));
+    }
+
+    @Test
+    void summarize_returnsApiErrorForRestClientException() {
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(JsonNode.class)))
+                .thenThrow(new ResourceAccessException("Connection refused"));
+
+        String result = chatService.summarize("Long text here...");
+
+        assertEquals("API Error: Connection refused", result);
+        verify(restTemplate, times(1)).postForEntity(anyString(), any(HttpEntity.class), eq(JsonNode.class));
+    }
+
+    @Test
+    void chat_retriesOn429AndReturnsFinalErrorMessage() {
+        HttpClientErrorException tooManyRequests = HttpClientErrorException.create(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Too Many Requests",
+                HttpHeaders.EMPTY,
+                "rate limit".getBytes(),
+                null);
+
+        when(chatMessageRepository.findBySessionIdOrderByIdAsc("s1"))
+                .thenReturn(List.of(new ChatMessage("s1", "user", "hello")));
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(JsonNode.class)))
+                .thenThrow(tooManyRequests);
+
+        String reply = chatService.chat("s1", "hello");
+
+        assertEquals("API Error: 429 Too Many Requests - rate limit", reply);
+        verify(restTemplate, times(4)).postForEntity(anyString(), any(HttpEntity.class), eq(JsonNode.class));
+        verify(chatMessageRepository, times(2)).save(any(ChatMessage.class));
     }
 
     @Test
